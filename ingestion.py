@@ -25,7 +25,7 @@ def scrape_website(url: str, batch_size: int = 50):
         embedding_function=embeddings,
         persist_directory=PERSISTENT_DIRECTORY,  # Where to save data locally, remove if not necessary
     )
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100, separators=["\n\n", "\n", ".", " "])
     all_urls = [loc.text for loc in soup.find_all("loc")]
     all_urls = all_urls[104:]
     for i in range(0, len(all_urls), batch_size):
