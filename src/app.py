@@ -1,6 +1,7 @@
 # app.py
 import streamlit as st
-from retriever import get_rag_chain
+from config.settings import Settings
+from src.retriever import get_rag_chain
 from langchain_core.messages import HumanMessage, AIMessage 
 
 # ==========================================

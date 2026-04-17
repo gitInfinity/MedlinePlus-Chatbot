@@ -19,6 +19,7 @@ def scrape_website(url: str, batch_size: int = 50):
     response = requests.get(sitemap_url)
     response.raise_for_status()  # Ensure we got a successful response
     soup = BeautifulSoup(response.content, "xml")
+    main_content = soup.find_all("div", {"id": "main-content"})
     embeddings = OllamaEmbeddings(
     model=Settings().embedding_model,)
     vectorDB = Chroma(
@@ -45,8 +46,12 @@ def scrape_website(url: str, batch_size: int = 50):
                 print(f"Error loading {current_url}: {e}")
         try:
             if batch_chunks:
-                vectorDB.add_documents(batch_chunks)
-                print(f"batch #{i} of chunks added to vector database successfully.")
+                batch_chunks = [chunk for chunk in batch_chunks if len(chunk.page_content) > 200]
+                if batch_chunks:
+                    vectorDB.add_documents(batch_chunks)
+                    print(f"✅ Successfully added {len(batch_chunks)} chunks to DB.")
+                else:
+                    print("⚠️ No chunks in this batch met the length requirement.")
         except Exception as e:
             print(f"An error occurred during ingestion: {e}")
 
@@ -55,7 +60,7 @@ def scrape_website(url: str, batch_size: int = 50):
 
 if __name__ == "__main__":
     scrape_website(SITE_URL)
-    db_path = "./db/chroma"
+    db_path = PERSISTENT_DIRECTORY
     # Check if the folder exists AND has files inside it
     if os.path.exists(db_path) and len(os.listdir(db_path)) > 0:
         print(f"🛑 SAFETY LOCK ACTIVATED: The database already exists!,")

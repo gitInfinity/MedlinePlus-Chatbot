@@ -7,10 +7,12 @@ from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains import create_history_aware_retriever
 from config.settings import Settings
 
-def get_rag_chain():
+def get_rag_chain(db_directory=None):
+    if db_directory is None:
+        db_directory = Settings().persistent_directory
     llm = ChatOllama(model=Settings().chat_model, temperature=0.3) 
     embeddings = OllamaEmbeddings(model=Settings().embedding_model)
-    vectordb = Chroma(persist_directory="./db/chroma", embedding_function=embeddings)
+    vectordb = Chroma(persist_directory=db_directory, embedding_function=embeddings)
     retriever = vectordb.as_retriever(search_kwargs={"k": 3})
 
     # 1. The Contextualizer: Rewrites follow-up questions to make sense

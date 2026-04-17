@@ -6,3 +6,4 @@ class Settings:
     embedding_model = "nomic-embed-text:latest"
     sitemap_url = "https://medlineplus.gov/sitemap.xml"
     persistent_directory = "./db/chroma"
+    test_directory = "./db/test_chroma"
