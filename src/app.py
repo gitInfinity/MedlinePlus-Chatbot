@@ -1,109 +1,165 @@
-# app.py
 import streamlit as st
 from retriever import get_rag_chain
 from langchain_core.messages import HumanMessage, AIMessage 
 
 # ==========================================
-# 1. PAGE SETUP & CSS INJECTION
+# 1. SETUP & THEME (The CSS Alignment Fix)
 # ==========================================
 st.set_page_config(page_title="MedlinePlus AI", page_icon="🩺", layout="centered")
 
 st.markdown("""
 <style>
-    [data-testid="stChatMessage"][data-baseweb="block"]:nth-child(odd) {
-        background-color: #E0ECFF;
-        border-radius: 15px;
-        padding: 1rem;
-        margin-left: auto;
-        max-width: 80%;
-        border: 1px solid #E2E8F0;
+    .stApp { background-color: #FFFFFF !important; }
+    
+    /* 1. Global Message Container */
+    [data-testid="stChatMessage"] { 
+        padding: 1.2rem !important;
+        border-radius: 20px !important;
+        margin-bottom: 1.5rem !important;
+        max-width: 85% !important;
+        display: flex !important;
     }
-    [data-testid="stChatMessage"][data-baseweb="block"]:nth-child(even) {
-        background-color: #FFFFFF;
-        border-radius: 15px;
-        padding: 1rem;
-        margin-right: auto;
-        max-width: 90%;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        border: 1px solid #E2E8F0;
+    
+    header, [data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+        backdrop-filter: none !important; /* Removes the blurry effect */
     }
-    .stChatMessageAvatar { display: none; }
+
+    /* 2. Ensure the icons (Settings, Deploy) stay visible */
+    [data-testid="stToolbar"] {
+        visibility: visible !important;
+        color: #1976D2 !important; /* Optional: Makes icons match your blue theme */
+    }
+
+    /* 3. Pull content up slightly so it feels more integrated */
+    .block-container {
+        padding-top: 3rem !important;
+    }
+
+    /* 🔵 ASSISTANT (Align Left) */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+        background-color: #E3F2FD !important;
+        border-left: 5px solid #1976D2 !important;
+        margin-right: auto !important;
+        flex-direction: row !important;
+    }
+
+    /* ⚪ USER (Align Right) */
+    /* We target the container that holds the user icon/label */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        background-color: #F8FAFC !important;
+        border: 1px solid #E2E8F0 !important;
+        border-right: 5px solid #cbd5e1 !important;
+        margin-left: auto !important; /* The magic bullet for right-alignment */
+        flex-direction: row-reverse !important; /* Flips the bubble to the right */
+        border-left: none !important;
+    }
+
+    /* Hide Avatars for the minimal look */
+    [data-testid="stChatMessageAvatar"] { display: none; }
+    
+    /* Ensure text aligns correctly inside reversed bubbles */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) .stMarkdown {
+        text-align: left !important;
+    }
+
+    /* Buttons & Sidebar UI */
+    .stButton > button {
+        border-radius: 12px !important;
+        background-color: white !important;
+        color: #1976D2 !important;
+        border: 1px solid #BBDEFB !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. LOAD BACKEND
-# ==========================================
-@st.cache_resource(show_spinner="Loading Medical Database...")
+@st.cache_resource(show_spinner=False)
 def load_backend():
-    # Streamlit runs this once and caches the engine
     return get_rag_chain()
-
-rag_chain = load_backend()
-
-# ==========================================
-# 3. UI: SIDEBAR & CHAT STATE
-# ==========================================
-with st.sidebar:
-    st.title("🩺 MedlinePlus AI")
-    st.caption("A private, locally-hosted medical RAG assistant.")
-    if st.button("Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-    st.divider()
-    st.markdown("⚠️ **Disclaimer:** This AI provides informational content only and is not a substitute for professional medical advice. Always consult a doctor.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-        if msg["role"] == "assistant" and "sources" in msg and msg["sources"]:
-            with st.expander("🧾 View Sources"):
-                for url in msg["sources"]:
-                    st.markdown(f"- [{url}]({url})")
-
 # ==========================================
-# 4. UI: INPUT & INTERACTION
+# 2. THE RESPONSE FUNCTION (Fixed Persistence)
 # ==========================================
-if user_query := st.chat_input("Ask a medical question..."):
+def handle_query(query_text):
+    # 1. Save to session state so it doesn't disappear on rerun
+    st.session_state.messages.append({"role": "user", "content": query_text})
     
-    st.session_state.messages.append({"role": "user", "content": user_query})
+    # 2. Manually render the message right now so it stays while AI thinks
+    # We do this OUTSIDE the loop to prevent "double rendering" later
     with st.chat_message("user"):
-        st.markdown(user_query)
-
+        st.markdown(query_text)
+    
+    # 3. Process AI Response
     with st.chat_message("assistant"):
-        with st.spinner("Searching medical database..."):
-            try:
-                # Call the backend engine
-                langchain_history = []
-                for msg in st.session_state.messages:
-                    if msg["role"] == "user":
-                        langchain_history.append(HumanMessage(content=msg["content"]))
-                    else:
-                        langchain_history.append(AIMessage(content=msg["content"]))
-                response = rag_chain.invoke({"input": user_query, "chat_history": langchain_history})
-                st.write("🔍 DEBUG - Context retrieved:", response["context"])
-                answer = response["answer"]
-                
-                sources = set()
-                for doc in response["context"]:
-                    if "source" in doc.metadata:
-                        sources.add(doc.metadata["source"])
-                
-                st.markdown(answer)
-                if sources:
-                    with st.expander("🧾 View Sources"):
-                        for url in sources:
-                            st.markdown(f"- [{url}]({url})")
-                            
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": answer,
-                    "sources": list(sources)
-                })
-                
-            except Exception as e:
-                st.error("Something went wrong. Please try again.")
-                print(f"Error: {e}")
+        with st.spinner("Consulting MedlinePlus database..."):
+            chain = load_backend()
+            history = [
+                HumanMessage(content=m["content"]) if m["role"]=="user" 
+                else AIMessage(content=m["content"]) 
+                for m in st.session_state.messages[:-1]
+            ]
+            
+            response = chain.invoke({"input": query_text, "chat_history": history})
+            answer = response["answer"]
+            sources = list(set(doc.metadata.get("source", "") for doc in response["context"]))
+            
+            st.markdown(answer)
+            if sources:
+                with st.expander("📚 Sources"):
+                    for s in sources: st.write(f"- {s}")
+            
+            # Save AI response to history
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": answer, 
+                "sources": sources
+            })
+
+# ==========================================
+# 3. UI LAYOUT
+# ==========================================
+with st.sidebar:
+    st.title("🩺 Medline AI")
+    if st.button("Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+if not st.session_state.messages:
+    # This is the "Hero" section that fills the blank screen
+    st.markdown("""
+        <div style='text-align: center; padding: 40px 0 20px 0;'>
+            <h1 style='color: #1976D2; font-size: 2.8rem; margin-bottom: 0;'>
+                How can I help you today?
+            </h1>
+            <p style='color: #64748b; font-size: 1.2rem; margin-top: 10px;'>
+                Search thousands of verified medical documents instantly.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    starters = ["What are symptoms of hypertension?", "How to prepare for a blood test?", "Explain Type 2 Diabetes", "Common side effects of Ibuprofen"]
+    
+    for i, text in enumerate(starters):
+        if (col1 if i % 2 == 0 else col2).button(text, use_container_width=True):
+            handle_query(text)
+            st.rerun()
+
+else:
+    # Display Chat History
+    for msg in st.session_state.messages:
+        # Note: We skip the LAST user message if we are currently in handle_query 
+        # to avoid double rendering, but handle_query ends with a rerun, 
+        # so this loop handles everything upon refresh.
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg["role"] == "assistant" and "sources" in msg:
+                with st.expander("📚 Sources"):
+                    for s in msg["sources"]: st.write(f"- {s}")
+
+if user_input := st.chat_input("Type your question..."):
+    handle_query(user_input)
+    st.rerun()
