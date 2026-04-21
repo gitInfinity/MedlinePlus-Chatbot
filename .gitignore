@@ -1,3 +1,15 @@
-*.env
-.venv
-\db
+# Environments
+.venv/
+.env
+
+# Database (CRITICAL to ignore)
+db/
+chroma/
+
+# Python Cache (Keeps your repo clean)
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
+Thumbs.db

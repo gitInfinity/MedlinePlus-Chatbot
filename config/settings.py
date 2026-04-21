@@ -7,3 +7,4 @@ class Settings:
     sitemap_url = "https://medlineplus.gov/sitemap.xml"
     persistent_directory = "./db/chroma"
     test_directory = "./db/test_chroma"
+    mock_directory = "./db/scripts_chroma"
