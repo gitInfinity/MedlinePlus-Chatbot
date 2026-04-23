@@ -1,6 +1,6 @@
+import time as tm
+import requests
 import streamlit as st
-from retriever import get_rag_chain
-from langchain_core.messages import HumanMessage, AIMessage 
 
 # ==========================================
 # 1. SETUP & THEME (The CSS Alignment Fix)
@@ -73,10 +73,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource(show_spinner=False)
-def load_backend():
-    return get_rag_chain()
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -84,39 +80,48 @@ if "messages" not in st.session_state:
 # 2. THE RESPONSE FUNCTION (Fixed Persistence)
 # ==========================================
 def handle_query(query_text):
-    # 1. Save to session state so it doesn't disappear on rerun
     st.session_state.messages.append({"role": "user", "content": query_text})
     
-    # 2. Manually render the message right now so it stays while AI thinks
-    # We do this OUTSIDE the loop to prevent "double rendering" later
     with st.chat_message("user"):
         st.markdown(query_text)
     
-    # 3. Process AI Response
     with st.chat_message("assistant"):
-        with st.spinner("Consulting MedlinePlus database..."):
-            chain = load_backend()
-            history = [
-                HumanMessage(content=m["content"]) if m["role"]=="user" 
-                else AIMessage(content=m["content"]) 
-                for m in st.session_state.messages[:-1]
-            ]
+        with st.spinner("Consulting MedlinePlus..."):
+            try:
+                # HTTP Request to the FastAPI Backend
+                response = requests.post(
+                    "http://backend:8000/ask", 
+                    json={"query": query_text, "chat_history": st.session_state.messages[:-1]},
+                    timeout=120 # Allow time for local inference
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    answer = data["answer"]
+                    sources = data["sources"]
+                    def stream_text():
+                        for word in answer.split(" "):
+                            yield word + " "
+                            tm.sleep(0.04) # Adjust this number to make it type faster or slower
             
-            response = chain.invoke({"input": query_text, "chat_history": history})
-            answer = response["answer"]
-            sources = list(set(doc.metadata.get("source", "") for doc in response["context"]))
-            
-            st.markdown(answer)
-            if sources:
-                with st.expander("📚 Sources"):
-                    for s in sources: st.write(f"- {s}")
-            
-            # Save AI response to history
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": answer, 
-                "sources": sources
-            })
+                    st.write_stream(stream_text)
+                    
+                    if sources:
+                        with st.expander("📚 Sources"):
+                            for s in sources: st.write(f"- {s}")
+                            
+                    st.session_state.messages.append({
+                        "role": "assistant", 
+                        "content": answer, 
+                        "sources": sources
+                    })
+                elif response.status_code == 503:
+                    st.error("⚠️ The local AI model is currently at capacity or cooling down. Please try again in a moment.")
+                else:
+                    st.error("An error occurred connecting to the medical database.")
+                    
+            except requests.exceptions.ConnectionError:
+                st.error("Backend server is unreachable. Ensure Docker containers are running.")
 
 # ==========================================
 # 3. UI LAYOUT
@@ -125,7 +130,7 @@ with st.sidebar:
     st.title("🩺 Medline AI")
     if st.button("Clear Chat", use_container_width=True):
         st.session_state.messages = []
-        st.rerun()
+        ##st.rerun()
 
 if not st.session_state.messages:
     # This is the "Hero" section that fills the blank screen
