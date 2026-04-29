@@ -1,6 +1,3 @@
-# docker-compose.yml
-version: '3.8'
-
 services:
   backend:
     build: 
@@ -9,11 +6,25 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./db:/app/db
+      - ./backend:/app
+      - hf_cache:/root/.cache/huggingface  # 👈 SYNC WHOLE FOLDER: This catches mlflow.db and mlruns
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11434/v1
     depends_on:
       - ollama
+    networks:
+      - medline-net
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    container_name: mlflow_ui
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app # 👈 This lets the UI see the same DB the backend is writing to
+    working_dir: /app
+    # Force 1 worker to avoid the Windows/Uvicorn crash we saw earlier
+    command: mlflow server --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 5000 --workers 1
     networks:
       - medline-net
 
@@ -27,6 +38,7 @@ services:
       - medline-net
 
   ollama:
+    # ... (keep your existing ollama config, it's perfect)
     image: ollama/ollama
     ports:
       - "11434:11434"
@@ -47,3 +59,4 @@ networks:
 
 volumes:
   ollama_data:
+  hf_cache:
