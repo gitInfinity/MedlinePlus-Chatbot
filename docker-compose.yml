@@ -1,3 +1,5 @@
+# docker-compose.yml - Defines the multi-container Docker application for the MedlinePlus Chatbot, including backend, frontend, MLflow, and Ollama services
+
 services:
   backend:
     build: 
@@ -7,9 +9,11 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - hf_cache:/root/.cache/huggingface  # 👈 SYNC WHOLE FOLDER: This catches mlflow.db and mlruns
+      - hf_cache:/root/.cache/huggingface  
     environment:
       - OLLAMA_HOST=http://ollama:11434/v1
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=Medline_RAG
     depends_on:
       - ollama
     networks:
@@ -21,10 +25,18 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./backend:/app # 👈 This lets the UI see the same DB the backend is writing to
+      - ./mlflow_data:/app/mlflow_data 
     working_dir: /app
     # Force 1 worker to avoid the Windows/Uvicorn crash we saw earlier
-    command: mlflow server --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 5000 --workers 1
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 5000 
+      --backend-store-uri sqlite:////app/mlflow_data/mlflow.db 
+      --registry-store-uri sqlite:////app/mlflow_data/mlflow.db
+      --default-artifact-root /app/mlflow_data/artifacts
+      --allowed-hosts '*'
+      --cors-allowed-origins '*'
     networks:
       - medline-net
 
@@ -32,6 +44,8 @@ services:
     build: ./frontend
     ports:
       - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
     depends_on:
       - backend
     networks:

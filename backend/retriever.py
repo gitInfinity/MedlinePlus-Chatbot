@@ -1,15 +1,9 @@
-# engine.py
-import sys
+# retriever.py - Defines the RAG chain with advanced retrieval and re-ranking for the MedlinePlus Chatbot
+
 import os
-
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add it to Python's system path
-if root_dir not in sys.path:
-    sys.path.append(root_dir)
-    
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_ollama import OllamaEmbeddings
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_classic.chains import create_retrieval_chain, create_history_aware_retriever
@@ -24,14 +18,20 @@ def get_rag_chain(db_directory=None):
         
     # --- 1. CORE COMPONENTS ---
     # Using 0.2 for the "bedside manner" balance we discussed
-    llm = ChatOllama(model=Settings().chat_model, temperature=0.2) 
-    embeddings = OllamaEmbeddings(model=Settings().embedding_model)
+    llm = ChatOpenAI(
+        model=Settings().chat_model, 
+        temperature=0.2,
+        openai_api_key="ollama", # Dummy key required by client
+        base_url= "http://ollama:11434/v1" # Critical: includes /v1
+    )  # API key is None because we're using Ollama as a local proxy
+    embeddings = OllamaEmbeddings(model=Settings().embedding_model,
+                                    base_url="http://ollama:11434")  # Critical: includes /v1
     
     vectordb = Chroma(persist_directory=db_directory, embedding_function=embeddings)
     
     # --- 2. ADVANCED RETRIEVAL (RE-RANKING) ---
     # We fetch a wide net (15 chunks) first
-    base_retriever = vectordb.as_retriever(search_kwargs={"k": 15})
+    base_retriever = vectordb.as_retriever(search_kwargs={"k": 8})
 
     # Initialize the Cross-Encoder scoring model
     print("⏳ Initializing Re-Ranker...")
