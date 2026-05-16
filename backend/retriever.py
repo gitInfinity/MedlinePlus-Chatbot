@@ -1,6 +1,7 @@
 # retriever.py - Defines the RAG chain with advanced retrieval and re-ranking for the MedlinePlus Chatbot
 
 import os
+from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 from langchain_openai import ChatOpenAI
@@ -11,6 +12,8 @@ from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from config.settings import Settings
+load_dotenv()  # Load environment variable or "ollama"s from .env file if present
+os.environ["ollama"] = os.getenv("ollama") or "ollama"
 
 def get_rag_chain(db_directory=None):
     if db_directory is None:
@@ -21,12 +24,10 @@ def get_rag_chain(db_directory=None):
     llm = ChatOpenAI(
         model=Settings().chat_model, 
         temperature=0.2,
-        openai_api_key="ollama", # Dummy key required by client
-        base_url= "http://ollama:11434/v1" # Critical: includes /v1
+        openai_api_key=os.environ["ollama"], # Ollama Cloud API key from .env
+        base_url= "https://api.ollama.com/v1" # Ollama Cloud API
     )  # API key is None because we're using Ollama as a local proxy
-    embeddings = OllamaEmbeddings(model=Settings().embedding_model,
-                                    base_url="http://ollama:11434")  # Critical: includes /v1
-    
+    embeddings = OllamaEmbeddings(model=Settings().embedding_model, base_url="http://host.docker.internal:11434")   
     vectordb = Chroma(persist_directory=db_directory, embedding_function=embeddings)
     
     # --- 2. ADVANCED RETRIEVAL (RE-RANKING) ---

@@ -15,5 +15,6 @@ COPY backend/requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --default-timeout=1000 -r requirements.txt
 COPY backend/ .
+COPY config/ ./config/
 EXPOSE 8000
 CMD ["uvicorn", "retrieve_api:app", "--host", "0.0.0.0", "--port", "8000"]

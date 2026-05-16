@@ -9,13 +9,15 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./config:/app/config
       - hf_cache:/root/.cache/huggingface  
     environment:
-      - OLLAMA_HOST=http://ollama:11434/v1
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_EXPERIMENT_NAME=Medline_RAG
-    depends_on:
-      - ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
     networks:
       - medline-net
 
@@ -51,26 +53,8 @@ services:
     networks:
       - medline-net
 
-  ollama:
-    # ... (keep your existing ollama config, it's perfect)
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - medline-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
 networks:
   medline-net:
 
 volumes:
-  ollama_data:
   hf_cache:

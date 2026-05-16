@@ -117,11 +117,18 @@ def handle_query(query_text):
                     })
                 elif response.status_code == 503:
                     st.error("⚠️ The local AI model is currently at capacity or cooling down. Please try again in a moment.")
+                elif response.status_code == 500:
+                    detail = response.json().get("detail", "Unknown server error")
+                    st.error(f"❌ Backend error: {detail}")
                 else:
-                    st.error("An error occurred connecting to the medical database.")
+                    st.error(f"⚠️ Unexpected error ({response.status_code}). Please try again.")
                     
             except requests.exceptions.ConnectionError:
-                st.error("Backend server is unreachable. Ensure Docker containers are running.")
+                st.error("🔌 Backend server is unreachable. Ensure Docker containers are running.")
+            except requests.exceptions.Timeout:
+                st.error("⏱️ Request timed out. The model may be overloaded — please try again.")
+            except Exception as e:
+                st.error(f"❌ An unexpected error occurred: {str(e)}")
 
 # ==========================================
 # 3. UI LAYOUT
